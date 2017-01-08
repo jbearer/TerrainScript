@@ -89,6 +89,36 @@ namespace Ts.Grayscale
         protected abstract Generator Apply(List<Generator> gs);
     }
 
+    public abstract class UnaryFilter : FixedArityFilter
+    {
+        public UnaryFilter()
+            : base(1)
+        {
+        }
+
+        protected override Generator Apply(List<Generator> gs)
+        {
+            return Apply(gs[0]);
+        }
+
+        protected abstract Generator Apply(Generator g);
+    }
+
+    public abstract class BinaryFilter : FixedArityFilter
+    {
+        public BinaryFilter()
+            : base(2)
+        {
+        }
+
+        protected override Generator Apply(List<Generator> gs)
+        {
+            return Apply(gs[0], gs[1]);
+        }
+
+        protected abstract Generator Apply(Generator l, Generator r);
+    }
+
     public class LazyGrayscale : GrayscaleImage
     {
         public delegate float ValueGenerator(float x, float y);
