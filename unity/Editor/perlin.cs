@@ -31,10 +31,10 @@ namespace Ts.Unity
 
             GUILayout.Label("Perlin");
 
-            _amplitude = EditorGUILayout.Slider(_amplitude, 0, _terrain.terrainData.size.y);
-            _frequency = EditorGUILayout.Slider(_frequency, 0, 100);
-            _octaves = EditorGUILayout.IntSlider(_octaves, 1, 25);
-            _persistence = EditorGUILayout.Slider(_persistence, 0, 1);
+            _amplitude = EditorGUILayout.Slider("Amplitude", _amplitude, 0, _terrain.terrainData.size.y);
+            _frequency = EditorGUILayout.Slider("Frequency", _frequency, 0, 100);
+            _octaves = EditorGUILayout.IntSlider("Octaves", _octaves, 1, 25);
+            _persistence = EditorGUILayout.Slider("Persistence", _persistence, 0, 1);
 
             _terrain.DebugControls(new Perlin(
                 _amplitude / _terrain.terrainData.size.y, _frequency, _octaves, _persistence));
