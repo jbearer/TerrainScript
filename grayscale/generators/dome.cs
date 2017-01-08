@@ -11,7 +11,7 @@ namespace Ts.Grayscale.Generators
             _radius = r;
         }
 
-        public override float Apply(float x, float y)
+        protected override float Apply(float x, float y)
         {
             Math.Vector2 p = new Math.Vector2(x, y);
             float dome = System.Math.Max(_radius*_radius - Math.Dot(p - _center, p - _center), 0);

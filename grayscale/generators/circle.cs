@@ -13,7 +13,7 @@ namespace Ts.Grayscale.Generators
             _feather = feather;
         }
 
-        public override float Apply(float x, float y)
+        protected override float Apply(float x, float y)
         {
             Math.Vector2 p = new Math.Vector2(x, y) - _center;
             float r2 = _radius * _radius;

@@ -34,20 +34,18 @@ namespace Ts.Grayscale.Generators
             }
         }
 
-        private float _amplitude;
         private float _frequency;
         private int _octaves;
         private float _persistence;
 
-        public Perlin(float amplitude, float frequency = 1, int octaves = 1, float persistence = 0.5f)
+        public Perlin(float frequency = 1, int octaves = 1, float persistence = 0.5f)
         {
-            _amplitude = amplitude;
             _frequency = frequency;
             _octaves = octaves;
             _persistence =persistence;
         }
 
-        public override float Apply(float x, float y)
+        protected override float Apply(float x, float y)
         {
             float total = 0;
             float A = 1;                   // Amplitude starts at 1, we'll normalize at the end
@@ -63,7 +61,7 @@ namespace Ts.Grayscale.Generators
                 w *= 2;
             }
 
-            return total * _amplitude / maxValue;
+            return total / maxValue;
         }
 
         private float getPoint(float x, float y)

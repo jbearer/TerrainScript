@@ -14,7 +14,7 @@ namespace Ts.Grayscale.Generators
             }
         }
 
-        public override float Apply(float x, float y)
+        protected override float Apply(float x, float y)
         {
             var p = new Math.Vector2(x, y);
             var proj = Math.Projection(p - _low, _high - _low);

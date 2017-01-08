@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Ts.Grayscale
 {
     // Exception used to indicate that a generator cannot create an image for any reason
@@ -25,7 +27,8 @@ namespace Ts.Grayscale
 
     public interface Filter
     {
-        Generator Apply(Generator g);
+        int Arity();
+        Generator Apply(List<Generator> gs);
     }
 
     public abstract class PointwiseGenerator : Generator
@@ -40,7 +43,50 @@ namespace Ts.Grayscale
             return new LazyGrayscale(height, width, Apply);
         }
 
-        public abstract float Apply(float x, float y);
+        protected abstract float Apply(float x, float y);
+    }
+
+    public class LambdaGenerator : PointwiseGenerator
+    {
+        public delegate float Applier(float x, float y);
+
+        private Applier _apply;
+
+        public LambdaGenerator(Applier apply)
+        {
+            _apply = apply;
+        }
+
+        protected override float Apply(float x, float y)
+        {
+            return _apply(x, y);
+        }
+    }
+
+    public abstract class FixedArityFilter : Filter
+    {
+        private int _arity;
+
+        public FixedArityFilter(int arity)
+        {
+            _arity = arity;
+        }
+
+        int Filter.Arity()
+        {
+            return _arity;
+        }
+
+        Generator Filter.Apply(List<Generator> gs)
+        {
+            if (gs.Count != _arity) {
+                throw new GrayscaleException(
+                    string.Format("{0}-ary filter applied to {1} generators", _arity, gs.Count));
+            }
+            return Apply(gs);
+        }
+
+        protected abstract Generator Apply(List<Generator> gs);
     }
 
     public class LazyGrayscale : GrayscaleImage
