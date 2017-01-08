@@ -123,5 +123,10 @@ namespace Ts
         {
             return (Dot(a, b) / Dot(b, b)) * b;
         }
+
+        public static float Norm(Vector2 v)
+        {
+            return (float)System.Math.Sqrt(Dot(v, v));
+        }
     }
 }
