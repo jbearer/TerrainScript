@@ -97,13 +97,13 @@ namespace Ts.Grayscale.Generators
 
             // Find the influence of each gradient vector, and then take a weighted average based on
             // the coordinates of the point within the unit square.
-            float bottom = lerp(grad(bottomLeft, xf, yf),
+            float bottom = Math.Lerp(grad(bottomLeft, xf, yf),
                                  grad(bottomRight, xf - 1, yf),
                                  u);
-            float top = lerp(grad(topLeft, xf, yf-1),
+            float top = Math.Lerp(grad(topLeft, xf, yf-1),
                               grad(topRight, xf-1, yf-1),
                               u);
-            float result = lerp(bottom, top, v);
+            float result = Math.Lerp(bottom, top, v);
 
             // Bound it to 0 - 1 (theoretical min/max before is -1 - 1)
             return (result + 1) / 2;
@@ -138,11 +138,6 @@ namespace Ts.Grayscale.Generators
         private static float fade(float t) {
             // 6t^5 - 15t^4 + 10t^3
             return t * t * t * (t * (t * 6 - 15) + 10);
-        }
-
-        // Linear interpolation from a to b with ratio x
-        private static float lerp(float a, float b, float x) {
-            return a + x * (b - a);
         }
     }
 }

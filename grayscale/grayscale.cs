@@ -1,5 +1,14 @@
 namespace Ts.Grayscale
 {
+    // Exception used to indicate that a generator cannot create an image for any reason
+    public class GrayscaleException : System.Exception
+    {
+        public GrayscaleException(string message)
+            : base(message)
+        {
+        }
+    }
+
     public interface GrayscaleImage
     {
         int Height();
