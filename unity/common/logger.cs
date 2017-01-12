@@ -1,8 +1,6 @@
-using UnityEngine;
-
 namespace Ts.Unity
 {
-    public class UnityLogger : Logger
+    public class UnityLogger : Logging.Logger
     {
         private readonly string _name;
 
@@ -11,30 +9,21 @@ namespace Ts.Unity
             _name = name;
         }
 
-        string Logger.Name{
+        public override string Name{
             get {
                 return _name;
             }
         }
 
-        void Logger.Debug(string fmt, params object[] args)
+        protected override void Log(Logging.Level level, string fmt, params object[] args)
         {
-            Debug.Log(string.Format(_name + ": " + fmt, args));
-        }
-
-        void Logger.Info(string fmt, params object[] args)
-        {
-            Debug.Log(string.Format(_name + ": " + fmt, args));
-        }
-
-        void Logger.Warn(string fmt, params object[] args)
-        {
-            Debug.LogWarning(string.Format(_name + ": " + fmt, args));
-        }
-
-        void Logger.Error(string fmt, params object[] args)
-        {
-            Debug.LogError(string.Format(_name + ": " + fmt, args));
+            if (level < Logging.Level.Warning) {
+                UnityEngine.Debug.Log(string.Format(_name + ": " + fmt, args));
+            } else if (level < Logging.Level.Error) {
+                UnityEngine.Debug.LogWarning(string.Format(_name + ": " + fmt, args));
+            } else {
+                UnityEngine.Debug.LogError(string.Format(_name + ": " + fmt, args));
+            }
         }
     }
 }
