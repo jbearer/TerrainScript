@@ -1,7 +1,35 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
+
+using Ts.Grayscale.Absyn;
 
 namespace Ts.Grayscale
 {
+    public class Log : Logging.StaticLogger<Log>
+    {
+        private static Logging.Logger _log = Logging.GetLogger("grayscale");
+        protected override Logging.Logger log
+        {
+            get {
+                return _log;
+            }
+        }
+    }
+
+    public static class GrayscaleEngine
+    {
+        public static T CreateComponent<T>(string name, ArgList args)
+            where T : Component
+        {
+            if (Info<T>.Factories.ContainsKey(name)) {
+                return Info<T>.Factories[name](args);
+            } else {
+                throw new GrayscaleException("no " + Ast.ComponentType<T>() + " '" + name + "'");
+            }
+        }
+    }
+
     // Exception used to indicate that a generator cannot create an image for any reason
     public class GrayscaleException : System.Exception
     {
@@ -19,104 +47,242 @@ namespace Ts.Grayscale
         float[,] ToArray();
     }
 
-    public interface Generator
+    public interface ComponentAttribute<T>
+        where T : Component
     {
-        float GenerateValue(float x, float y);
-        GrayscaleImage GenerateImage(int height, int width);
+        string Name { get; }
+
+        // Required named arguments. If specified, the system will check that these arguments exist
+        // and have the right types before calling FactoryType.ParseArgs.
+        string[] RequiredArgs { get; }
+        AstType[] RequiredArgTypes { get; }
+
+        // Optional named arguments. Before calling FactoryType.ParseArgs, the system will check
+        // that any of the given arguments are present in either RequiredArgs or OptionalArgs.
+        // In addition, if any optional args are not specified, they will be added to the specified
+        // args with a default value, so that when the underlying generator attempts to parse the
+        // arguments, all arguments are guaranteed to be present.
+        // Note: because of the limitations regarding what types of parameters can be passed to
+        // attributes, the default arguments are not typesafe. So be careful.
+        string[] OptionalArgs { get; }
+        AstType[] OptionalArgTypes { get; }
+        object[] OptionalArgDefaults { get; }
     }
 
-    public interface Filter
+    public static class ComponentAttributeExtensions
     {
-        int Arity();
-        Generator Apply(List<Generator> gs);
-    }
-
-    public abstract class PointwiseGenerator : Generator
-    {
-        float Generator.GenerateValue(float x, float y)
+        private static Exception FailIt<T>(this ComponentAttribute<T> a, string msg)
+            where T : Component
         {
-            return Apply(x, y);
+            return new GrayscaleException(
+                Ast.ComponentType<T>() + " registration for " + a.Name + " " + msg);
         }
 
-        GrayscaleImage Generator.GenerateImage(int height, int width)
+        public static Func<ArgList, T> GetFactory<T>(this ComponentAttribute<T> a, Type implType)
+            where T : Component
         {
-            return new LazyGrayscale(height, width, Apply);
-        }
+            Log.Info("using {0} implementation '{1}' for '{2}'",
+                Ast.ComponentType<T>(), implType.ToString(), a.Name);
 
-        protected abstract float Apply(float x, float y);
-    }
-
-    public class LambdaGenerator : PointwiseGenerator
-    {
-        public delegate float Applier(float x, float y);
-
-        private Applier _apply;
-
-        public LambdaGenerator(Applier apply)
-        {
-            _apply = apply;
-        }
-
-        protected override float Apply(float x, float y)
-        {
-            return _apply(x, y);
-        }
-    }
-
-    public abstract class FixedArityFilter : Filter
-    {
-        private int _arity;
-
-        public FixedArityFilter(int arity)
-        {
-            _arity = arity;
-        }
-
-        int Filter.Arity()
-        {
-            return _arity;
-        }
-
-        Generator Filter.Apply(List<Generator> gs)
-        {
-            if (gs.Count != _arity) {
-                throw new GrayscaleException(
-                    string.Format("{0}-ary filter applied to {1} generators", _arity, gs.Count));
+            var factory = implType.GetMethod("ParseArgs", new Type[]{typeof(ArgList)});
+            if (factory == null
+                || !typeof(T).IsAssignableFrom(factory.ReturnType)
+                || !factory.IsStatic)
+            {
+                throw a.FailIt("does not have static method '" +
+                    typeof(T).ToString() + " ParseArgs(ArgList)'");
             }
-            return Apply(gs);
-        }
 
-        protected abstract Generator Apply(List<Generator> gs);
+            // Turn those cumbersome arrays into dictionaries, making sure that all the argument
+            // names are distinct.
+            var requiredArgs = new Dictionary<string, AstType>();
+            var optionalArgs = new ArgList();
+            for (int i = 0; i < a.RequiredArgs.Length; i++) {
+                if (requiredArgs.ContainsKey(a.RequiredArgs[i])) {
+                    throw a.FailIt("has two arguments named " + a.RequiredArgs[i]);
+                } else {
+                    requiredArgs.Add(a.RequiredArgs[i], a.RequiredArgTypes[i]);
+                }
+            }
+            for (int i = 0; i < a.OptionalArgs.Length; i++) {
+                if (requiredArgs.ContainsKey(a.OptionalArgs[i])
+                    || optionalArgs.ContainsKey(a.OptionalArgs[i])) {
+                    throw a.FailIt("has two arguments named " + a.OptionalArgs[i]);
+                } else {
+                    AstValue defaultValue = null;
+                    switch (a.OptionalArgTypes[i]) {
+                    case AstType.Int:
+                        defaultValue = new AstInt((int)a.OptionalArgDefaults[i]);
+                        break;
+                    case AstType.Float:
+                        defaultValue = new AstFloat((float)a.OptionalArgDefaults[i]);
+                        break;
+                    default:
+                        throw a.FailIt("has unsupported default argument type '" +
+                            a.OptionalArgTypes[i].ToString() + "'");
+                    }
+                    optionalArgs.Add(a.OptionalArgs[i], defaultValue);
+                }
+            }
+
+            return (args) => {
+                // Make sure we have all of the required args.
+                foreach (var requiredArg in requiredArgs) {
+                    if (args.ContainsKey(requiredArg.Key)) {
+                        if (args[requiredArg.Key].AstType != requiredArg.Value) {
+                            throw new GrayscaleException("parameter '" + requiredArg.Key + "' " +
+                                "of " + Ast.ComponentType<T>() + " '" + a.Name + "' is the wrong type.\n" +
+                                "\tRequired: " + requiredArg.Value.ToString() + "\n" +
+                                "\tFound: " + args[requiredArg.Key].AstType.ToString());
+                        }
+                    } else {
+                        throw new GrayscaleException("instantiation of " + Ast.ComponentType<T>() + " '" +
+                            a.Name + "' " + "requires argument '" + requiredArg.Key + "'");
+                    }
+                }
+
+                // Make sure every argument specified is either required or optional, and has the
+                // correct type.
+                foreach (var arg in args) {
+                    if (requiredArgs.ContainsKey(arg.Key)) {
+                        if (arg.Value.AstType != requiredArgs[arg.Key]) {
+                            throw new GrayscaleException("parameter '" + arg.Key + "' " +
+                                "of " + Ast.ComponentType<T>() + " '" + a.Name + "' is the wrong type.\n" +
+                                "\tRequired: " + requiredArgs[arg.Key].ToString() + "\n" +
+                                "\tFound: " + arg.Value.AstType.ToString());
+                        }
+                    } else if (optionalArgs.ContainsKey(arg.Key)) {
+                        if (arg.Value.AstType != optionalArgs[arg.Key].AstType) {
+                            throw new GrayscaleException("parameter '" + arg.Key + "' " +
+                                "of " + Ast.ComponentType<T>() + " '" + a.Name + "' is the wrong type.\n" +
+                                "\tRequired: " + optionalArgs[arg.Key].ToString() + "\n" +
+                                "\tFound: " + arg.Value.AstType.ToString());
+                        }
+                    } else {
+                        throw new GrayscaleException("unrecognized parameter '" + arg.Key + "' " +
+                            "in instantiation of " + Ast.ComponentType<T>() + " '" + a.Name + "'");
+                    }
+                }
+
+                // Go through optional arguments, adding default values where no value is specified
+                foreach (var optArg in optionalArgs) {
+                    if (!args.ContainsKey(optArg.Key)) {
+                        args.Add(optArg.Key, optArg.Value);
+                    }
+                }
+
+                Log.Info("instantiating '{0}' with args [{1}]", a.Name,
+                    string.Join(", ", args.Keys.Select(k => k + " = " + args[k].ToString()).ToArray()));
+
+                // Delegate to the underlying constructor
+                return (T)(factory.Invoke(null, new object[]{args}));
+            };
+        }
     }
 
-    public abstract class UnaryFilter : FixedArityFilter
+    public abstract class ComponentAttributeBase : Attribute
     {
-        public UnaryFilter()
-            : base(1)
-        {
-        }
+        public string Name { get; set; }
+        public string[] RequiredArgs { get; set; }
+        public AstType[] RequiredArgTypes { get; set; }
+        public string[] OptionalArgs { get; set; }
+        public AstType[] OptionalArgTypes { get; set; }
+        public object[] OptionalArgDefaults { get; set; }
 
-        protected override Generator Apply(List<Generator> gs)
+        public ComponentAttributeBase(string name)
         {
-            return Apply(gs[0]);
-        }
+            Name = name;
 
-        protected abstract Generator Apply(Generator g);
+            // All the argument arrays default to empty
+            if (RequiredArgs == null) {
+                RequiredArgs = new string[]{};
+            }
+            if (RequiredArgTypes == null) {
+                RequiredArgTypes = new AstType[]{};
+            }
+            if (OptionalArgs == null) {
+                OptionalArgs = new string[]{};
+            }
+            if (OptionalArgTypes == null) {
+                OptionalArgTypes = new AstType[]{};
+            }
+            if (OptionalArgDefaults == null) {
+                OptionalArgDefaults = new object[]{};
+            }
+
+            // Number of required args must be the same as number of specified types
+            if (RequiredArgs.Length != RequiredArgTypes.Length) {
+                throw new GrayscaleException("component registration for " + name +
+                    " specifies required argument names and types of different lengths");
+            }
+
+            // Same for OptionalArgs
+            if (OptionalArgs.Length != OptionalArgTypes.Length) {
+                throw new GrayscaleException("component registration for " + name +
+                    " specifies optional argument names and types of different lengths");
+            }
+            if (OptionalArgs.Length != OptionalArgDefaults.Length) {
+                throw new GrayscaleException("component registration for " + name +
+                    " specifies optional argument names and default values of different lengths");
+            }
+        }
     }
 
-    public abstract class BinaryFilter : FixedArityFilter
+    // Attribute used to register a generator with the grayscale engine.
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
+    public class GeneratorAttribute : ComponentAttributeBase, ComponentAttribute<Generator>
     {
-        public BinaryFilter()
-            : base(2)
+        public GeneratorAttribute(string name)
+            : base(name)
         {
         }
+    }
 
-        protected override Generator Apply(List<Generator> gs)
+     // Attribute used to register a filter with the grayscale engine.
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
+    public class FilterAttribute : ComponentAttributeBase, ComponentAttribute<Filter>
+    {
+        public FilterAttribute(string name)
+            : base(name)
         {
-            return Apply(gs[0], gs[1]);
         }
+    }
 
-        protected abstract Generator Apply(Generator l, Generator r);
+    public static class Info<T>
+        where T : Component
+    {
+        // It's impossible to make this code generic, because we can't make attributes generic.
+        // Sadly, we have to specialize. Unfortunately, generic specialization is bad and so we use
+        // an ugly introspection hack (what else is new).
+
+        public static Dictionary<string, Func<ArgList, T>> Factories = Info<T>.getFactories();
+
+        private static Dictionary<string, Func<ArgList, T>> getFactories()
+        {
+            Log.Info("discovering registered {0}s", Ast.ComponentType<T>());
+
+            var infos = new Dictionary<string, Func<ArgList, T>>();
+
+            if (typeof(T) == typeof(Generator)) {
+                foreach (var typePair in Introspection.GetAllWithAttribute<GeneratorAttribute>(false)) {
+                    var factory = typePair.Attribute.GetFactory(typePair.Type);
+                    infos.Add(typePair.Attribute.Name, (args) => (T)(object)factory(args));
+                }
+            } else if (typeof(T) == typeof(Filter)) {
+                foreach (var typePair in Introspection.GetAllWithAttribute<FilterAttribute>(false)) {
+                    var factory = typePair.Attribute.GetFactory(typePair.Type);
+                    infos.Add(typePair.Attribute.Name, (args) => (T)(object)factory(args));
+                }
+            } else {
+                // Should never happen
+                throw new GrayscaleException("component type is not generator or filter");
+            }
+
+             Log.Info("discovered {0} {1}s: {2}",
+                infos.Count, Ast.ComponentType<T>(), string.Join(", ", infos.Keys.ToArray()));
+
+            return infos;
+        }
     }
 
     public class LazyGrayscale : GrayscaleImage

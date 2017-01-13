@@ -3,8 +3,17 @@
  * http://flafla2.github.io/2014/08/09/perlinnoise.html.
  */
 
+using System.Collections.Generic;
+
+using Ts.Grayscale.Absyn;
+
 namespace Ts.Grayscale.Generators
 {
+    [Generator("perlin",
+        OptionalArgs = new string[]{"frequency", "octaves", "persistence"},
+        OptionalArgTypes = new AstType[]{AstType.Float, AstType.Int, AstType.Float},
+        OptionalArgDefaults = new object[]{1.0f, 1, 0.5f})
+    ]
     public class Perlin : PointwiseGenerator
     {
         // Hash lookup table as defined by Ken Perlin. This is a randomly arranged array of all
@@ -42,7 +51,15 @@ namespace Ts.Grayscale.Generators
         {
             _frequency = frequency;
             _octaves = octaves;
-            _persistence =persistence;
+            _persistence = persistence;
+        }
+
+        public static Generator ParseArgs(ArgList args)
+        {
+            return new Perlin(
+                args["frequency"].AsFloat.Value,
+                args["octaves"].AsInt.Value,
+                args["persistence"].AsFloat.Value);
         }
 
         protected override float Apply(float x, float y)

@@ -2,11 +2,23 @@ using UnityEditor;
 using UnityEngine;
 
 using Ts.Grayscale;
+using Ts.Grayscale.Absyn;
 
 namespace Ts.Unity
 {
     public static class UnityTerrain
     {
+        public class Log : Logging.StaticLogger<Log>
+        {
+            private static Logging.Logger _log = Logging.GetLogger("terrain");
+            protected override Logging.Logger log
+            {
+                get {
+                    return _log;
+                }
+            }
+        }
+
         public static void DebugControls(this Terrain t, Generator g)
         {
             if (GUILayout.Button("Generate Heightmap")) {

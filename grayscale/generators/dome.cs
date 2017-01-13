@@ -1,9 +1,23 @@
+using Ts.Grayscale.Absyn;
+
 namespace Ts.Grayscale.Generators
 {
+    [Generator("dome",
+        RequiredArgs = new string[]{"x", "y", "r"},
+        RequiredArgTypes = new AstType[]{AstType.Float, AstType.Float, AstType.Float})
+    ]
     public class Dome : PointwiseGenerator
     {
         private Math.Vector2 _center;
         private float        _radius;
+
+        public static Generator ParseArgs(ArgList args)
+        {
+            return new Dome(
+                args["x"].AsFloat.Value,
+                args["y"].AsFloat.Value,
+                args["r"].AsFloat.Value);
+        }
 
         public Dome(float x, float y, float r)
         {

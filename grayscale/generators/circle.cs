@@ -1,10 +1,28 @@
+using Ts.Grayscale.Absyn;
+
 namespace Ts.Grayscale.Generators
 {
+    [Generator("circle",
+        RequiredArgs = new string[]{"x", "y", "r"},
+        RequiredArgTypes = new AstType[]{AstType.Float, AstType.Float, AstType.Float},
+        OptionalArgs = new string[]{"feather"},
+        OptionalArgTypes = new AstType[]{AstType.Float},
+        OptionalArgDefaults = new object[]{0.0f})
+    ]
     public class Circle : PointwiseGenerator
     {
         private Math.Vector2 _center;
         private float        _radius;
         private float        _feather;
+
+        public static Generator ParseArgs(ArgList args)
+        {
+            return new Circle(
+                args["x"].AsFloat.Value,
+                args["y"].AsFloat.Value,
+                args["r"].AsFloat.Value,
+                args["feather"].AsFloat.Value);
+        }
 
         public Circle(float x, float y, float r, float feather = 0)
         {
